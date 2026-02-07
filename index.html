@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>时间记录助手</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark">PO</div>
+          <div>
+            <p class="brand-title">个人操作台</p>
+            <p class="brand-subtitle">Personal Ops</p>
+          </div>
+        </div>
+        <nav id="moduleNav" class="module-nav"></nav>
+        <div class="sidebar-footer">
+          <button type="button" class="ghost-btn ghost-btn--small" disabled>
+            设置
+          </button>
+        </div>
+      </aside>
+      <div class="app-content">
+        <header class="app-topbar">
+          <div>
+            <p class="topbar-label">欢迎回来</p>
+            <h1>今日控制面板</h1>
+          </div>
+          <div class="topbar-actions">
+            <button type="button" class="ghost-btn" disabled>新建草稿</button>
+            <button type="button" class="primary-btn" id="topbarQuickAction">
+              快速开始
+            </button>
+          </div>
+        </header>
+        <section id="moduleHost" class="module-host">
+          <div class="module-empty">
+            <p>请选择左侧的模块开始。</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <template id="timeModuleTemplate">
+      <div class="module-screen time-module">
+        <header class="module-header">
+          <div>
+            <h2>时间记录助手</h2>
+            <p>记录每一个时间段，回顾并分析每天的专注去向。</p>
+          </div>
+          <div class="header-actions">
+            <label class="date-picker">
+              <span>查看日期</span>
+              <input type="date" id="datePicker" />
+            </label>
+            <button id="exportBtn" class="ghost-btn">导出 JSON</button>
+          </div>
+        </header>
+
+        <main class="time-module-main">
+          <section class="panel">
+            <h3>快速记录</h3>
+            <div class="form-grid">
+              <label class="label-with-action">
+                <span>事项名称</span>
+                <div class="input-action-row">
+                  <input
+                    type="text"
+                    id="taskName"
+                    placeholder="写下你正在做的事情"
+                  />
+                  <button
+                    type="button"
+                    id="voiceBtn"
+                    class="voice-btn"
+                    aria-label="使用语音输入事项名称"
+                  >
+                    语音输入
+                  </button>
+                </div>
+                <p id="voiceHint" class="field-hint">
+                  点击语音输入按钮即可通过语音快速填写事项。
+                </p>
+              </label>
+              <label>
+                <span>类别（可选）</span>
+                <input type="text" id="taskCategory" placeholder="学习 / 工作 / 生活..." />
+              </label>
+              <label class="full-width">
+                <span>备注（可选）</span>
+                <textarea
+                  id="taskNotes"
+                  rows="3"
+                  placeholder="记录背景、目标或关键内容"
+                ></textarea>
+              </label>
+            </div>
+
+            <div class="timer-card" id="timerCard">
+              <div>
+                <p class="timer-label">当前计时</p>
+                <p class="timer-display" id="timerDisplay">00:00:00</p>
+                <p class="timer-meta" id="timerMeta">暂无进行中的任务</p>
+              </div>
+              <div class="timer-actions">
+                <button id="startBtn" class="primary-btn">开始计时</button>
+                <button id="stopBtn" class="danger-btn" disabled>结束并保存</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="layout">
+            <div class="panel">
+              <div class="panel-header">
+                <h3>今日记录</h3>
+                <span id="totalTimeBadge" class="badge">总计 0h0m</span>
+              </div>
+              <div id="entriesList" class="entries-list empty-state">
+                <p>今天还没有记录，点击上方开始按钮吧。</p>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3>总结分析</h3>
+              </div>
+              <div id="summaryContent" class="summary-content empty-state">
+                <p>记录几段时间后，系统会自动计算各类占比、最长事项等信息。</p>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <template id="entryTemplate">
+          <article class="entry-card">
+            <div class="entry-main">
+              <h3 class="entry-title"></h3>
+              <p class="entry-notes"></p>
+              <div class="entry-meta">
+                <span class="chip entry-category"></span>
+                <span class="chip entry-duration"></span>
+                <span class="chip entry-time-range"></span>
+              </div>
+            </div>
+            <div class="entry-actions">
+              <button
+                type="button"
+                class="icon-btn"
+                data-entry-action="delete"
+                aria-label="删除这条记录"
+              >
+                <span class="icon-trash" aria-hidden="true"></span>
+              </button>
+            </div>
+          </article>
+        </template>
+      </div>
+    </template>
+
+    <template id="textModuleTemplate">
+      <div class="module-screen text-module">
+        <header class="module-header">
+          <div>
+            <h2>文本草稿板</h2>
+            <p>快速粘贴、编辑并复制你的临时草稿或灵感片段。</p>
+          </div>
+          <div class="header-actions">
+            <button type="button" class="ghost-btn" id="newDraftBtn">新建草稿</button>
+          </div>
+        </header>
+
+        <main class="text-module-main">
+          <section class="panel draft-editor">
+            <div class="form-grid">
+              <label>
+                <span>草稿标题</span>
+                <input type="text" id="draftTitle" placeholder="如：会议纪要 / 灵感笔记" />
+              </label>
+              <label class="full-width">
+                <span>草稿内容</span>
+                <textarea
+                  id="draftContent"
+                  rows="16"
+                  placeholder="粘贴或输入你的文本..."
+                ></textarea>
+              </label>
+            </div>
+
+            <div class="draft-actions">
+              <div class="draft-actions-left">
+                <button
+                  type="button"
+                  class="voice-btn"
+                  id="draftVoiceBtn"
+                  aria-label="使用语音输入草稿内容"
+                >
+                  语音输入
+                </button>
+                <span id="draftVoiceHint" class="field-hint">可用语音快速补充内容。</span>
+              </div>
+              <div class="draft-actions-right">
+                <button type="button" class="ghost-btn" id="insertTimestampBtn">
+                  插入当前时间
+                </button>
+                <button type="button" class="ghost-btn" id="copyDraftBtn">复制文本</button>
+                <button type="button" class="ghost-btn" id="exportDraftBtn">
+                  导出 TXT
+                </button>
+                <button type="button" class="primary-btn" id="saveDraftBtn">
+                  保存到草稿库
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel draft-library">
+            <div class="panel-header">
+              <h3>草稿库</h3>
+              <button type="button" class="ghost-btn ghost-btn--small" id="clearDraftsBtn">
+                清空全部
+              </button>
+            </div>
+            <div id="draftList" class="draft-list empty-state">
+              <p>暂未保存草稿，保存后将在此展示，方便复用。</p>
+            </div>
+          </section>
+        </main>
+      </div>
+    </template>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
