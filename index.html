@@ -67,7 +67,22 @@
         </header>
 
         <main class="time-module-main">
-          <section class="panel">
+          <div class="time-module-top">
+            <section class="panel todo-panel">
+              <div class="panel-header">
+                <h3>今日待办</h3>
+                <span id="todoCountBadge" class="badge">0/0</span>
+              </div>
+              <div class="todo-input-row">
+                <input type="text" id="todoInput" placeholder="添加新待办事项..." />
+                <button type="button" class="primary-btn" id="addTodoBtn">添加</button>
+              </div>
+              <ul id="todoList" class="todo-list empty-state">
+                <li class="todo-empty-hint">暂无待办事项，添加一些今天要做的事吧。</li>
+              </ul>
+            </section>
+
+            <section class="panel">
             <h3>快速记录</h3>
             <div class="form-grid">
               <label class="label-with-action">
@@ -117,6 +132,7 @@
               </div>
             </div>
           </section>
+          </div>
 
           <section class="layout">
             <div class="panel">
@@ -189,7 +205,7 @@
                 <span>草稿内容</span>
                 <textarea
                   id="draftContent"
-                  rows="16"
+                  rows="24"
                   placeholder="粘贴或输入你的文本..."
                 ></textarea>
               </label>
@@ -231,6 +247,49 @@
             </div>
             <div id="draftList" class="draft-list empty-state">
               <p>暂未保存草稿，保存后将在此展示，方便复用。</p>
+            </div>
+          </section>
+        </main>
+      </div>
+    </template>
+
+    <template id="fileShareModuleTemplate">
+      <div class="module-screen file-share-module">
+        <header class="module-header">
+          <div>
+            <h2>文件快传</h2>
+            <p>上传文件生成下载链接，方便跨设备传输。</p>
+          </div>
+        </header>
+
+        <main class="file-share-main">
+          <section class="panel upload-panel">
+            <h3>上传文件</h3>
+            <div class="upload-zone" id="uploadZone">
+              <div class="upload-zone-content">
+                <span class="upload-icon">📁</span>
+                <p>拖拽文件到这里，或点击选择文件</p>
+                <p class="upload-hint">支持各类文件，单个最大 500MB</p>
+              </div>
+              <input type="file" id="fileInput" hidden />
+            </div>
+            <div id="uploadProgress" class="upload-progress" hidden>
+              <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+              </div>
+              <p class="progress-text" id="progressText">上传中...</p>
+            </div>
+          </section>
+
+          <section class="panel file-list-panel">
+            <div class="panel-header">
+              <h3>已上传文件</h3>
+              <button type="button" class="ghost-btn ghost-btn--small" id="refreshFilesBtn">
+                刷新列表
+              </button>
+            </div>
+            <div id="fileList" class="file-list empty-state">
+              <p>暂无上传文件</p>
             </div>
           </section>
         </main>

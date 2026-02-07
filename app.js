@@ -87,8 +87,10 @@ function initAppShell() {
 
   const timeTrackerModule = createTimeTrackerModule();
   const textDraftModule = createTextDraftModule();
+  const fileShareModule = createFileShareModule();
   moduleRegistry.register(timeTrackerModule);
   moduleRegistry.register(textDraftModule);
+  moduleRegistry.register(fileShareModule);
 
   if (quickAction) {
     quickAction.addEventListener('click', () => {
@@ -102,13 +104,15 @@ function initAppShell() {
 
 function createTimeTrackerModule() {
   const STORAGE_KEY = 'ptr_entries_v1';
+  const TODO_STORAGE_KEY = 'ptr_todos_v1';
   const DEFAULT_TITLE = '未命名事项';
   const dom = {};
   const state = {
     activeSession: null,
     intervalId: null,
     selectedDate: null,
-    inlineEditor: null
+    inlineEditor: null,
+    todos: []
   };
   let rootEl = null;
 
@@ -127,6 +131,8 @@ function createTimeTrackerModule() {
     setupVoiceInput();
     initializeDateState();
     bindEvents();
+    loadTodos();
+    renderTodoList();
     renderDay();
   }
 
@@ -160,6 +166,11 @@ function createTimeTrackerModule() {
     dom.entryTemplate = rootEl.querySelector('#entryTemplate');
     dom.voiceBtn = rootEl.querySelector('#voiceBtn');
     dom.voiceHint = rootEl.querySelector('#voiceHint');
+    // 待办事项 DOM
+    dom.todoInput = rootEl.querySelector('#todoInput');
+    dom.addTodoBtn = rootEl.querySelector('#addTodoBtn');
+    dom.todoList = rootEl.querySelector('#todoList');
+    dom.todoCountBadge = rootEl.querySelector('#todoCountBadge');
   }
 
   function bindEvents() {
@@ -169,6 +180,16 @@ function createTimeTrackerModule() {
     dom.exportBtn?.addEventListener('click', handleExport);
     dom.entriesList?.addEventListener('click', handleEntryListClick);
     dom.entriesList?.addEventListener('dblclick', handleEntryDblClick);
+    // 待办事项事件
+    dom.addTodoBtn?.addEventListener('click', handleAddTodo);
+    dom.todoInput?.addEventListener('keydown', handleTodoInputKeydown);
+    dom.todoList?.addEventListener('click', handleTodoListClick);
+    dom.todoList?.addEventListener('change', handleTodoCheckChange);
+    // 拖拽排序事件
+    dom.todoList?.addEventListener('dragstart', handleTodoDragStart);
+    dom.todoList?.addEventListener('dragover', handleTodoDragOver);
+    dom.todoList?.addEventListener('dragend', handleTodoDragEnd);
+    dom.todoList?.addEventListener('drop', handleTodoDrop);
   }
 
   function setupVoiceInput() {
@@ -809,6 +830,213 @@ function createTimeTrackerModule() {
     return localISO.slice(0, 10);
   }
 
+  // ============ 待办事项功能 ============
+  function loadTodos() {
+    try {
+      const todayKey = formatDateKey(new Date());
+      const raw = localStorage.getItem(TODO_STORAGE_KEY);
+      const allTodos = raw ? JSON.parse(raw) : {};
+      state.todos = allTodos[todayKey] || [];
+    } catch (error) {
+      console.error('Failed to load todos', error);
+      state.todos = [];
+    }
+  }
+
+  function persistTodos() {
+    try {
+      const todayKey = formatDateKey(new Date());
+      const raw = localStorage.getItem(TODO_STORAGE_KEY);
+      const allTodos = raw ? JSON.parse(raw) : {};
+      allTodos[todayKey] = state.todos;
+      localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(allTodos));
+    } catch (error) {
+      console.error('Failed to persist todos', error);
+    }
+  }
+
+  function handleAddTodo() {
+    const text = dom.todoInput?.value.trim();
+    if (!text) {
+      return;
+    }
+    const newTodo = {
+      id: crypto?.randomUUID?.() || `todo-${Date.now()}`,
+      text,
+      completed: false,
+      createdAt: Date.now()
+    };
+    state.todos.push(newTodo);
+    persistTodos();
+    renderTodoList();
+    if (dom.todoInput) {
+      dom.todoInput.value = '';
+      dom.todoInput.focus();
+    }
+  }
+
+  function handleTodoInputKeydown(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleAddTodo();
+    }
+  }
+
+  function handleTodoListClick(event) {
+    const deleteBtn = event.target.closest('[data-todo-action="delete"]');
+    if (!deleteBtn) {
+      return;
+    }
+    const todoItem = deleteBtn.closest('.todo-item');
+    if (!todoItem) {
+      return;
+    }
+    const todoId = todoItem.dataset.todoId;
+    state.todos = state.todos.filter((t) => t.id !== todoId);
+    persistTodos();
+    renderTodoList();
+  }
+
+  function handleTodoCheckChange(event) {
+    if (event.target.type !== 'checkbox') {
+      return;
+    }
+    const todoItem = event.target.closest('.todo-item');
+    if (!todoItem) {
+      return;
+    }
+    const todoId = todoItem.dataset.todoId;
+    const todo = state.todos.find((t) => t.id === todoId);
+    if (todo) {
+      todo.completed = event.target.checked;
+      persistTodos();
+      renderTodoList();
+    }
+  }
+
+  function renderTodoList() {
+    if (!dom.todoList) {
+      return;
+    }
+
+    // 更新计数徽章
+    const completedCount = state.todos.filter((t) => t.completed).length;
+    const totalCount = state.todos.length;
+    if (dom.todoCountBadge) {
+      dom.todoCountBadge.textContent = `${completedCount}/${totalCount}`;
+    }
+
+    if (!state.todos.length) {
+      dom.todoList.classList.add('empty-state');
+      dom.todoList.innerHTML = '<li class="todo-empty-hint">暂无待办事项，添加一些今天要做的事吧。</li>';
+      return;
+    }
+
+    dom.todoList.classList.remove('empty-state');
+    dom.todoList.innerHTML = '';
+
+    const fragment = document.createDocumentFragment();
+    // 按存储顺序渲染（支持拖拽排序）
+    state.todos.forEach((todo, index) => {
+      const li = document.createElement('li');
+      li.className = 'todo-item' + (todo.completed ? ' completed' : '');
+      li.dataset.todoId = todo.id;
+      li.dataset.todoIndex = index;
+      li.draggable = true;
+      const orderNum = index + 1;
+      li.innerHTML = `
+        <span class="todo-order">${orderNum}</span>
+        <input type="checkbox" ${todo.completed ? 'checked' : ''} />
+        <span class="todo-item-text">${escapeHtml(todo.text)}</span>
+        <button type="button" class="icon-btn" data-todo-action="delete" aria-label="删除待办">
+          <span class="icon-trash" aria-hidden="true"></span>
+        </button>
+      `;
+      fragment.appendChild(li);
+    });
+
+    dom.todoList.appendChild(fragment);
+  }
+
+  // 拖拽排序功能
+  let draggedTodoId = null;
+
+  function handleTodoDragStart(event) {
+    const todoItem = event.target.closest('.todo-item');
+    if (!todoItem) {
+      return;
+    }
+    draggedTodoId = todoItem.dataset.todoId;
+    todoItem.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', draggedTodoId);
+  }
+
+  function handleTodoDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    
+    const todoItem = event.target.closest('.todo-item');
+    if (!todoItem || todoItem.dataset.todoId === draggedTodoId) {
+      return;
+    }
+    
+    // 添加拖拽经过的视觉反馈
+    const items = dom.todoList.querySelectorAll('.todo-item');
+    items.forEach((item) => item.classList.remove('drag-over'));
+    todoItem.classList.add('drag-over');
+  }
+
+  function handleTodoDragEnd(event) {
+    const todoItem = event.target.closest('.todo-item');
+    if (todoItem) {
+      todoItem.classList.remove('dragging');
+    }
+    // 清除所有拖拽状态
+    const items = dom.todoList?.querySelectorAll('.todo-item') || [];
+    items.forEach((item) => {
+      item.classList.remove('drag-over');
+      item.classList.remove('dragging');
+    });
+    draggedTodoId = null;
+  }
+
+  function handleTodoDrop(event) {
+    event.preventDefault();
+    
+    const targetItem = event.target.closest('.todo-item');
+    if (!targetItem || !draggedTodoId) {
+      return;
+    }
+    
+    const targetId = targetItem.dataset.todoId;
+    if (targetId === draggedTodoId) {
+      return;
+    }
+    
+    // 找到拖拽和目标的索引
+    const draggedIndex = state.todos.findIndex((t) => t.id === draggedTodoId);
+    const targetIndex = state.todos.findIndex((t) => t.id === targetId);
+    
+    if (draggedIndex === -1 || targetIndex === -1) {
+      return;
+    }
+    
+    // 移动元素
+    const [draggedItem] = state.todos.splice(draggedIndex, 1);
+    state.todos.splice(targetIndex, 0, draggedItem);
+    
+    persistTodos();
+    renderTodoList();
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  // ============ 待办事项功能结束 ============
+
   return {
     id: 'time-tracker',
     label: '时间记录',
@@ -821,12 +1049,16 @@ function createTimeTrackerModule() {
 
 function createTextDraftModule() {
   const STORAGE_KEY = 'ptr_text_drafts_v1';
+  const AUTOSAVE_KEY = 'ptr_text_draft_autosave_v1';
   const DEFAULT_TITLE = '未命名草稿';
+  const AUTOSAVE_DELAY = 1000; // 1秒后自动保存
   const dom = {};
   const state = {
     drafts: [],
     currentDraftId: null,
-    recognition: null
+    recognition: null,
+    autosaveTimer: null,
+    boundBeforeUnload: null
   };
   let rootEl = null;
 
@@ -841,11 +1073,16 @@ function createTextDraftModule() {
     cacheDom();
     bindEvents();
     loadDrafts();
+    processAutosave(); // 处理上次未保存的内容
     renderDraftList();
     updateSaveButton();
+    setupAutosave();
   }
 
   function unmount() {
+    // 在卸载前保存当前编辑内容
+    saveAutosave();
+    cleanupAutosave();
     stopVoiceInput();
     rootEl = null;
     state.currentDraftId = null;
@@ -894,6 +1131,140 @@ function createTextDraftModule() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.drafts));
   }
 
+  // ============ 自动保存功能 ============
+  function setupAutosave() {
+    // 监听输入事件，延迟保存
+    dom.draftTitle?.addEventListener('input', scheduleAutosave);
+    dom.draftContent?.addEventListener('input', scheduleAutosave);
+    
+    // 页面关闭/刷新前保存
+    state.boundBeforeUnload = () => saveAutosave();
+    window.addEventListener('beforeunload', state.boundBeforeUnload);
+    
+    // 页面失去焦点时也保存（切换标签页等）
+    window.addEventListener('blur', saveAutosave);
+  }
+
+  function cleanupAutosave() {
+    if (state.autosaveTimer) {
+      clearTimeout(state.autosaveTimer);
+      state.autosaveTimer = null;
+    }
+    if (state.boundBeforeUnload) {
+      window.removeEventListener('beforeunload', state.boundBeforeUnload);
+      state.boundBeforeUnload = null;
+    }
+    window.removeEventListener('blur', saveAutosave);
+    dom.draftTitle?.removeEventListener('input', scheduleAutosave);
+    dom.draftContent?.removeEventListener('input', scheduleAutosave);
+  }
+
+  function scheduleAutosave() {
+    if (state.autosaveTimer) {
+      clearTimeout(state.autosaveTimer);
+    }
+    state.autosaveTimer = setTimeout(() => {
+      saveAutosave();
+      state.autosaveTimer = null;
+    }, AUTOSAVE_DELAY);
+  }
+
+  function saveAutosave() {
+    const title = dom.draftTitle?.value || '';
+    const content = dom.draftContent?.value || '';
+    
+    // 如果内容为空，不保存
+    if (!content.trim()) {
+      return;
+    }
+    
+    // 如果是正在编辑已保存的草稿，不需要自动保存为新记录
+    // （已保存的草稿有 currentDraftId，用户下次可以从草稿库找到）
+    if (state.currentDraftId) {
+      // 保存当前编辑状态的临时数据，以便同步更新
+      const autosaveData = {
+        title,
+        content,
+        currentDraftId: state.currentDraftId,
+        savedAt: Date.now(),
+        isExistingDraft: true
+      };
+      try {
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(autosaveData));
+      } catch (error) {
+        console.error('自动保存失败', error);
+      }
+      return;
+    }
+    
+    // 对于新内容，保存为待处理的自动保存记录
+    const autosaveData = {
+      title: title.trim() || '自动保存',
+      content,
+      currentDraftId: null,
+      savedAt: Date.now(),
+      isExistingDraft: false
+    };
+    
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(autosaveData));
+    } catch (error) {
+      console.error('自动保存失败', error);
+    }
+  }
+
+  function processAutosave() {
+    try {
+      const raw = localStorage.getItem(AUTOSAVE_KEY);
+      if (!raw) {
+        return;
+      }
+      
+      const autosaveData = JSON.parse(raw);
+      
+      // 检查是否有内容
+      if (!autosaveData.content?.trim()) {
+        clearAutosave();
+        return;
+      }
+      
+      // 如果是已保存草稿的编辑，更新该草稿
+      if (autosaveData.isExistingDraft && autosaveData.currentDraftId) {
+        const existingIndex = state.drafts.findIndex(d => d.id === autosaveData.currentDraftId);
+        if (existingIndex >= 0) {
+          state.drafts[existingIndex] = {
+            ...state.drafts[existingIndex],
+            title: autosaveData.title || state.drafts[existingIndex].title,
+            content: autosaveData.content,
+            updatedAt: autosaveData.savedAt
+          };
+          persistDrafts();
+        }
+      } else {
+        // 对于新内容，创建一条新的草稿记录
+        const newDraft = {
+          id: crypto?.randomUUID?.() || `draft-${Date.now()}`,
+          title: autosaveData.title || '自动保存',
+          content: autosaveData.content,
+          updatedAt: autosaveData.savedAt,
+          isAutoSaved: true // 标记为自动保存
+        };
+        state.drafts.unshift(newDraft);
+        persistDrafts();
+      }
+      
+      // 清除自动保存数据
+      clearAutosave();
+    } catch (error) {
+      console.error('处理自动保存内容失败', error);
+    }
+  }
+
+  function clearAutosave() {
+    localStorage.removeItem(AUTOSAVE_KEY);
+  }
+  // ============ 自动保存功能结束 ============
+
   function handleSaveDraft() {
     const title = dom.draftTitle?.value.trim() || DEFAULT_TITLE;
     const content = dom.draftContent?.value || '';
@@ -918,6 +1289,7 @@ function createTextDraftModule() {
 
     state.currentDraftId = payload.id;
     persistDrafts();
+    clearAutosave(); // 手动保存后清除自动保存
     renderDraftList();
     updateSaveButton();
   }
@@ -965,6 +1337,15 @@ function createTextDraftModule() {
   }
 
   function handleNewDraft() {
+    // 如果当前有未保存的内容，询问是否保存
+    const currentContent = dom.draftContent?.value?.trim();
+    if (currentContent && !state.currentDraftId) {
+      const shouldSave = confirm('当前有未保存的内容，是否先保存到草稿库？');
+      if (shouldSave) {
+        handleSaveDraft();
+      }
+    }
+    
     state.currentDraftId = null;
     if (dom.draftTitle) {
       dom.draftTitle.value = '';
@@ -973,6 +1354,7 @@ function createTextDraftModule() {
       dom.draftContent.value = '';
       dom.draftContent.focus();
     }
+    clearAutosave();
     updateSaveButton();
   }
 
@@ -1154,12 +1536,13 @@ function createTextDraftModule() {
     const fragment = document.createDocumentFragment();
     state.drafts.forEach((draft) => {
       const card = document.createElement('article');
-      card.className = 'draft-card';
+      card.className = 'draft-card' + (draft.isAutoSaved ? ' draft-card--autosaved' : '');
       card.dataset.draftId = draft.id;
+      const autoSaveTag = draft.isAutoSaved ? '<span class="draft-autosave-tag">自动保存</span>' : '';
       card.innerHTML = `
         <div class="draft-card-header">
           <div>
-            <p class="draft-card-title">${escapeHtml(draft.title)}</p>
+            <p class="draft-card-title">${escapeHtml(draft.title)}${autoSaveTag}</p>
             <p class="draft-card-subtitle">${formatRelativeTime(draft.updatedAt)}</p>
           </div>
           <div class="draft-card-actions">
@@ -1204,6 +1587,337 @@ function createTextDraftModule() {
     id: 'text-drafts',
     label: '文本草稿',
     icon: '📝',
+    mount,
+    unmount
+  };
+}
+
+function createFileShareModule() {
+  const dom = {};
+  let rootEl = null;
+
+  function mount(hostEl) {
+    const template = document.getElementById('fileShareModuleTemplate');
+    if (!template) {
+      hostEl.innerHTML = '<p>无法加载文件快传模块。</p>';
+      return;
+    }
+    hostEl.appendChild(template.content.cloneNode(true));
+    rootEl = hostEl.querySelector('.file-share-module');
+    cacheDom();
+    bindEvents();
+    loadFileList();
+  }
+
+  function unmount() {
+    rootEl = null;
+    Object.keys(dom).forEach((key) => {
+      dom[key] = null;
+    });
+  }
+
+  function cacheDom() {
+    dom.uploadZone = rootEl.querySelector('#uploadZone');
+    dom.fileInput = rootEl.querySelector('#fileInput');
+    dom.uploadProgress = rootEl.querySelector('#uploadProgress');
+    dom.progressFill = rootEl.querySelector('#progressFill');
+    dom.progressText = rootEl.querySelector('#progressText');
+    dom.fileList = rootEl.querySelector('#fileList');
+    dom.refreshFilesBtn = rootEl.querySelector('#refreshFilesBtn');
+  }
+
+  function bindEvents() {
+    // 点击上传区域触发文件选择
+    dom.uploadZone?.addEventListener('click', () => {
+      dom.fileInput?.click();
+    });
+
+    // 文件选择
+    dom.fileInput?.addEventListener('change', handleFileSelect);
+
+    // 拖拽上传
+    dom.uploadZone?.addEventListener('dragover', handleDragOver);
+    dom.uploadZone?.addEventListener('dragleave', handleDragLeave);
+    dom.uploadZone?.addEventListener('drop', handleDrop);
+
+    // 刷新列表
+    dom.refreshFilesBtn?.addEventListener('click', loadFileList);
+
+    // 文件列表点击事件
+    dom.fileList?.addEventListener('click', handleFileListClick);
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dom.uploadZone?.classList.add('drag-over');
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dom.uploadZone?.classList.remove('drag-over');
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dom.uploadZone?.classList.remove('drag-over');
+
+    const files = event.dataTransfer?.files;
+    if (files?.length > 0) {
+      uploadFile(files[0]);
+    }
+  }
+
+  function handleFileSelect(event) {
+    const files = event.target.files;
+    if (files?.length > 0) {
+      uploadFile(files[0]);
+    }
+    // 重置 input 以便可以重复选择同一文件
+    if (dom.fileInput) {
+      dom.fileInput.value = '';
+    }
+  }
+
+  function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // 显示上传进度
+    if (dom.uploadProgress) {
+      dom.uploadProgress.hidden = false;
+    }
+    if (dom.progressFill) {
+      dom.progressFill.style.width = '0%';
+    }
+    if (dom.progressText) {
+      dom.progressText.textContent = `正在上传: ${file.name}`;
+    }
+
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable && dom.progressFill) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        dom.progressFill.style.width = `${percent}%`;
+        if (dom.progressText) {
+          dom.progressText.textContent = `上传中: ${percent}%`;
+        }
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 200) {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          if (response.success) {
+            if (dom.progressText) {
+              dom.progressText.textContent = '上传成功！';
+            }
+            setTimeout(() => {
+              if (dom.uploadProgress) {
+                dom.uploadProgress.hidden = true;
+              }
+            }, 1500);
+            loadFileList();
+          } else {
+            showUploadError(response.error || '上传失败');
+          }
+        } catch {
+          showUploadError('解析响应失败');
+        }
+      } else {
+        showUploadError(`上传失败: ${xhr.status}`);
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      showUploadError('网络错误，请检查连接');
+    });
+
+    xhr.open('POST', '/api/files/upload');
+    xhr.send(formData);
+  }
+
+  function showUploadError(message) {
+    if (dom.progressText) {
+      dom.progressText.textContent = message;
+      dom.progressText.style.color = '#dc2626';
+    }
+    setTimeout(() => {
+      if (dom.uploadProgress) {
+        dom.uploadProgress.hidden = true;
+      }
+      if (dom.progressText) {
+        dom.progressText.style.color = '';
+      }
+    }, 3000);
+  }
+
+  async function loadFileList() {
+    try {
+      const response = await fetch('/api/files');
+      const data = await response.json();
+      renderFileList(data.files || []);
+    } catch (error) {
+      console.error('Failed to load file list:', error);
+      if (dom.fileList) {
+        dom.fileList.innerHTML = '<p class="error">加载文件列表失败，请确保服务器已启动。</p>';
+      }
+    }
+  }
+
+  function renderFileList(files) {
+    if (!dom.fileList) {
+      return;
+    }
+
+    if (!files.length) {
+      dom.fileList.classList.add('empty-state');
+      dom.fileList.innerHTML = '<p>暂无上传文件</p>';
+      return;
+    }
+
+    dom.fileList.classList.remove('empty-state');
+    dom.fileList.innerHTML = '';
+
+    const fragment = document.createDocumentFragment();
+    const baseUrl = window.location.origin;
+
+    files.forEach((file) => {
+      const card = document.createElement('div');
+      card.className = 'file-card';
+      card.dataset.fileId = file.id;
+
+      const icon = getFileIcon(file.originalName);
+      const size = formatFileSize(file.size);
+      const time = formatTime(file.uploadedAt);
+      const downloadUrl = `${baseUrl}/d/${file.id}`;
+
+      card.innerHTML = `
+        <span class="file-icon">${icon}</span>
+        <div class="file-info">
+          <p class="file-name" title="${escapeHtml(file.originalName)}">${escapeHtml(file.originalName)}</p>
+          <div class="file-meta">
+            <span>${size}</span>
+            <span>${time}</span>
+            <span>下载 ${file.downloads || 0} 次</span>
+          </div>
+          <div class="download-link" title="点击复制链接">${downloadUrl}</div>
+        </div>
+        <div class="file-actions">
+          <button type="button" class="ghost-btn ghost-btn--small copy-link-btn" data-action="copy" data-url="${downloadUrl}">
+            📋 复制链接
+          </button>
+          <button type="button" class="icon-btn" data-action="delete" aria-label="删除文件">
+            <span class="icon-trash" aria-hidden="true"></span>
+          </button>
+        </div>
+      `;
+
+      fragment.appendChild(card);
+    });
+
+    dom.fileList.appendChild(fragment);
+  }
+
+  function handleFileListClick(event) {
+    const copyBtn = event.target.closest('[data-action="copy"]');
+    if (copyBtn) {
+      const url = copyBtn.dataset.url;
+      navigator.clipboard?.writeText(url).then(() => {
+        const original = copyBtn.innerHTML;
+        copyBtn.innerHTML = '✓ 已复制';
+        setTimeout(() => {
+          copyBtn.innerHTML = original;
+        }, 1500);
+      }).catch(() => {
+        alert('复制失败，请手动复制链接');
+      });
+      return;
+    }
+
+    const deleteBtn = event.target.closest('[data-action="delete"]');
+    if (deleteBtn) {
+      const card = deleteBtn.closest('.file-card');
+      const fileId = card?.dataset.fileId;
+      if (fileId && confirm('确定删除这个文件吗？')) {
+        deleteFile(fileId);
+      }
+      return;
+    }
+
+    // 点击链接区域复制
+    const linkEl = event.target.closest('.download-link');
+    if (linkEl) {
+      const url = linkEl.textContent;
+      navigator.clipboard?.writeText(url).then(() => {
+        const original = linkEl.textContent;
+        linkEl.textContent = '✓ 已复制到剪贴板';
+        setTimeout(() => {
+          linkEl.textContent = original;
+        }, 1500);
+      });
+    }
+  }
+
+  async function deleteFile(fileId) {
+    try {
+      const response = await fetch(`/api/files/${fileId}`, {
+        method: 'DELETE'
+      });
+      const data = await response.json();
+      if (data.success) {
+        loadFileList();
+      } else {
+        alert(data.error || '删除失败');
+      }
+    } catch (error) {
+      console.error('Failed to delete file:', error);
+      alert('删除失败，请重试');
+    }
+  }
+
+  function getFileIcon(filename) {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const icons = {
+      zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
+      pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊',
+      ppt: '📽️', pptx: '📽️',
+      jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️', svg: '🖼️',
+      mp3: '🎵', wav: '🎵', flac: '🎵',
+      mp4: '🎬', avi: '🎬', mkv: '🎬', mov: '🎬',
+      exe: '⚙️', msi: '⚙️', dmg: '⚙️',
+      js: '💻', ts: '💻', py: '💻', java: '💻', cpp: '💻', c: '💻',
+      html: '🌐', css: '🎨', json: '📋', xml: '📋',
+      txt: '📃', md: '📃'
+    };
+    return icons[ext] || '📁';
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+
+  function formatTime(timestamp) {
+    return new Date(timestamp).toLocaleString('zh-CN');
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  return {
+    id: 'file-share',
+    label: '文件快传',
+    icon: '📤',
     mount,
     unmount
   };
