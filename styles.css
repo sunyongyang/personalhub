@@ -1115,29 +1115,57 @@ button {
   flex-wrap: wrap;
 }
 
-.file-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
 .copy-link-btn {
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
+.download-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
 .download-link {
   display: block;
-  margin-top: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   background: #f1f5f9;
-  border-radius: 8px;
+  border-radius: 6px;
   font-family: monospace;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #475569;
   word-break: break-all;
   user-select: all;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.download-link:hover {
+  background: #e2e8f0;
+}
+
+.download-link.wget-link {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.download-link.wget-link:hover {
+  background: #fde68a;
+}
+
+.file-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.file-actions .ghost-btn--small {
+  font-size: 0.7rem;
+  padding: 0.4rem 0.6rem;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {

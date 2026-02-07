@@ -37,6 +37,8 @@ const storage = multer.diskStorage({
     cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
+    // 修复中文文件名编码问题
+    file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf-8');
     // 生成唯一文件ID
     const fileId = crypto.randomBytes(8).toString('hex');
     const ext = path.extname(file.originalname);
@@ -47,7 +49,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 500 * 1024 * 1024 // 最大 500MB
+    fileSize: 15 * 1024 * 1024 * 1024 // 最大 15GB
   }
 });
 

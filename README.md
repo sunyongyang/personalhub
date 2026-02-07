@@ -21,7 +21,10 @@
 ### 📤 文件快传
 - 上传文件生成下载链接
 - **直链下载** - 无需打开控制台，直接通过链接下载
-- 支持拖拽上传，最大 500MB
+- **上传进度可视化** - 显示实时上传速度与预计剩余时间
+- **双链接支持** - 浏览器直接下载 + wget 命令一键复制
+- 支持拖拽上传，最大 15GB
+- 完美支持中文文件名
 - 显示下载次数统计
 - 适合跨设备传输文件
 
@@ -119,28 +122,35 @@ personalhub/
 
 5. **配置防火墙**
    ```bash
-   # 阿里云安全组需要开放对应端口
+   # 阿里云安全组需要开放端口 80
    # CentOS/RHEL
-   firewall-cmd --permanent --add-port=3000/tcp
+   firewall-cmd --permanent --add-service=http
    firewall-cmd --reload
    
    # Ubuntu
-   ufw allow 3000
+   ufw allow 'Nginx HTTP'
    ```
 
 6. **访问应用**
    ```
-   http://你的服务器IP:3000
+   http://你的服务器IP
    ```
 
-### 使用 Nginx 反向代理（可选）
+### Nginx 反向代理配置（部署脚本自动配置）
 
 ```nginx
 server {
     listen 80;
     server_name your-domain.com;
 
-    client_max_body_size 500M;
+    # 支持大文件上传 (15GB)
+    client_max_body_size 15G;
+    
+    # 上传超时设置
+    proxy_connect_timeout 600;
+    proxy_send_timeout 600;
+    proxy_read_timeout 600;
+    send_timeout 600;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -149,7 +159,13 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
+        
+        # 禁用缓冲以支持大文件
+        proxy_buffering off;
+        proxy_request_buffering off;
     }
 }
 ```
@@ -178,7 +194,7 @@ DELETE /api/files/:id
 GET /d/:id
 ```
 
-直接在浏览器访问 `http://服务器地址:3000/d/文件ID` 即可下载，无需登录。
+直接在浏览器访问 `http://服务器地址/d/文件ID` 即可下载，无需登录。
 
 ## 浏览器支持
 
