@@ -112,7 +112,8 @@ function createTimeTrackerModule() {
     intervalId: null,
     selectedDate: null,
     inlineEditor: null,
-    todos: []
+    todos: [],
+    todoViewDate: null // null 表示今日，有值表示查看历史
   };
   let rootEl = null;
 
@@ -171,6 +172,12 @@ function createTimeTrackerModule() {
     dom.addTodoBtn = rootEl.querySelector('#addTodoBtn');
     dom.todoList = rootEl.querySelector('#todoList');
     dom.todoCountBadge = rootEl.querySelector('#todoCountBadge');
+    dom.todoPanelTitle = rootEl.querySelector('#todoPanelTitle');
+    dom.todoHistoryBtn = rootEl.querySelector('#todoHistoryBtn');
+    dom.todoHistoryPicker = rootEl.querySelector('#todoHistoryPicker');
+    dom.todoHistoryDate = rootEl.querySelector('#todoHistoryDate');
+    dom.todoBackToToday = rootEl.querySelector('#todoBackToToday');
+    dom.todoInputRow = rootEl.querySelector('#todoInputRow');
   }
 
   function bindEvents() {
@@ -190,6 +197,10 @@ function createTimeTrackerModule() {
     dom.todoList?.addEventListener('dragover', handleTodoDragOver);
     dom.todoList?.addEventListener('dragend', handleTodoDragEnd);
     dom.todoList?.addEventListener('drop', handleTodoDrop);
+    // 待办历史事件
+    dom.todoHistoryBtn?.addEventListener('click', handleTodoHistoryToggle);
+    dom.todoHistoryDate?.addEventListener('change', handleTodoHistoryDateChange);
+    dom.todoBackToToday?.addEventListener('click', handleTodoBackToToday);
   }
 
   function setupVoiceInput() {
@@ -831,12 +842,12 @@ function createTimeTrackerModule() {
   }
 
   // ============ 待办事项功能 ============
-  function loadTodos() {
+  function loadTodos(dateKey = null) {
     try {
-      const todayKey = formatDateKey(new Date());
+      const targetKey = dateKey || formatDateKey(new Date());
       const raw = localStorage.getItem(TODO_STORAGE_KEY);
       const allTodos = raw ? JSON.parse(raw) : {};
-      state.todos = allTodos[todayKey] || [];
+      state.todos = allTodos[targetKey] || [];
     } catch (error) {
       console.error('Failed to load todos', error);
       state.todos = [];
@@ -844,6 +855,10 @@ function createTimeTrackerModule() {
   }
 
   function persistTodos() {
+    // 只在查看今日时才能保存
+    if (state.todoViewDate !== null) {
+      return;
+    }
     try {
       const todayKey = formatDateKey(new Date());
       const raw = localStorage.getItem(TODO_STORAGE_KEY);
@@ -855,7 +870,75 @@ function createTimeTrackerModule() {
     }
   }
 
+  function handleTodoHistoryToggle() {
+    if (dom.todoHistoryPicker) {
+      const isHidden = dom.todoHistoryPicker.style.display === 'none';
+      dom.todoHistoryPicker.style.display = isHidden ? 'flex' : 'none';
+      if (isHidden && dom.todoHistoryDate) {
+        // 设置日期选择器的最大值为今天，不限制最小值
+        const today = formatDateKey(new Date());
+        dom.todoHistoryDate.max = today;
+        dom.todoHistoryDate.value = state.todoViewDate || today;
+      }
+    }
+  }
+
+  function handleTodoHistoryDateChange() {
+    const selectedDate = dom.todoHistoryDate?.value;
+    if (!selectedDate) {
+      return;
+    }
+    const todayKey = formatDateKey(new Date());
+    if (selectedDate === todayKey) {
+      handleTodoBackToToday();
+      return;
+    }
+    state.todoViewDate = selectedDate;
+    loadTodos(selectedDate);
+    renderTodoList();
+    updateTodoHistoryUI();
+  }
+
+  function handleTodoBackToToday() {
+    state.todoViewDate = null;
+    loadTodos();
+    renderTodoList();
+    updateTodoHistoryUI();
+    if (dom.todoHistoryPicker) {
+      dom.todoHistoryPicker.style.display = 'none';
+    }
+  }
+
+  function updateTodoHistoryUI() {
+    const isViewingHistory = state.todoViewDate !== null;
+    
+    // 更新标题
+    if (dom.todoPanelTitle) {
+      if (isViewingHistory) {
+        const date = new Date(state.todoViewDate + 'T00:00:00');
+        const formatted = date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+        dom.todoPanelTitle.textContent = `${formatted} 待办`;
+      } else {
+        dom.todoPanelTitle.textContent = '今日待办';
+      }
+    }
+    
+    // 隐藏/显示输入行（历史记录只读）
+    if (dom.todoInputRow) {
+      dom.todoInputRow.style.display = isViewingHistory ? 'none' : 'flex';
+    }
+    
+    // 更新历史按钮状态
+    if (dom.todoHistoryBtn) {
+      dom.todoHistoryBtn.textContent = isViewingHistory ? '📅 查看历史中' : '📅 历史';
+    }
+  }
+
   function handleAddTodo() {
+    // 查看历史时不能添加
+    if (state.todoViewDate !== null) {
+      return;
+    }
     const text = dom.todoInput?.value.trim();
     if (!text) {
       return;
@@ -883,6 +966,10 @@ function createTimeTrackerModule() {
   }
 
   function handleTodoListClick(event) {
+    // 查看历史时禁止删除操作
+    if (state.todoViewDate !== null) {
+      return;
+    }
     const deleteBtn = event.target.closest('[data-todo-action="delete"]');
     if (!deleteBtn) {
       return;
@@ -898,6 +985,12 @@ function createTimeTrackerModule() {
   }
 
   function handleTodoCheckChange(event) {
+    // 查看历史时禁止勾选操作
+    if (state.todoViewDate !== null) {
+      event.preventDefault();
+      event.target.checked = !event.target.checked;
+      return;
+    }
     if (event.target.type !== 'checkbox') {
       return;
     }
@@ -919,6 +1012,8 @@ function createTimeTrackerModule() {
       return;
     }
 
+    const isViewingHistory = state.todoViewDate !== null;
+
     // 更新计数徽章
     const completedCount = state.todos.filter((t) => t.completed).length;
     const totalCount = state.todos.length;
@@ -928,7 +1023,10 @@ function createTimeTrackerModule() {
 
     if (!state.todos.length) {
       dom.todoList.classList.add('empty-state');
-      dom.todoList.innerHTML = '<li class="todo-empty-hint">暂无待办事项，添加一些今天要做的事吧。</li>';
+      const emptyHint = isViewingHistory 
+        ? '该日期没有待办记录。'
+        : '暂无待办事项，添加一些今天要做的事吧。';
+      dom.todoList.innerHTML = `<li class="todo-empty-hint">${emptyHint}</li>`;
       return;
     }
 
@@ -939,18 +1037,25 @@ function createTimeTrackerModule() {
     // 按存储顺序渲染（支持拖拽排序）
     state.todos.forEach((todo, index) => {
       const li = document.createElement('li');
-      li.className = 'todo-item' + (todo.completed ? ' completed' : '');
+      li.className = 'todo-item' + (todo.completed ? ' completed' : '') + (isViewingHistory ? ' readonly' : '');
       li.dataset.todoId = todo.id;
       li.dataset.todoIndex = index;
-      li.draggable = true;
+      // 历史模式禁用拖拽
+      li.draggable = !isViewingHistory;
       const orderNum = index + 1;
-      li.innerHTML = `
-        <span class="todo-order">${orderNum}</span>
-        <input type="checkbox" ${todo.completed ? 'checked' : ''} />
-        <span class="todo-item-text">${escapeHtml(todo.text)}</span>
+      
+      // 历史模式不显示删除按钮
+      const deleteBtn = isViewingHistory ? '' : `
         <button type="button" class="icon-btn" data-todo-action="delete" aria-label="删除待办">
           <span class="icon-trash" aria-hidden="true"></span>
         </button>
+      `;
+      
+      li.innerHTML = `
+        <span class="todo-order">${orderNum}</span>
+        <input type="checkbox" ${todo.completed ? 'checked' : ''} ${isViewingHistory ? 'disabled' : ''} />
+        <span class="todo-item-text">${escapeHtml(todo.text)}</span>
+        ${deleteBtn}
       `;
       fragment.appendChild(li);
     });

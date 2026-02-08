@@ -70,10 +70,15 @@
           <div class="time-module-top">
             <section class="panel todo-panel">
               <div class="panel-header">
-                <h3>今日待办</h3>
+                <h3 id="todoPanelTitle">今日待办</h3>
                 <span id="todoCountBadge" class="badge">0/0</span>
+                <button type="button" class="ghost-btn ghost-btn--small" id="todoHistoryBtn">📅 历史</button>
               </div>
-              <div class="todo-input-row">
+              <div id="todoHistoryPicker" class="todo-history-picker" style="display: none;">
+                <input type="date" id="todoHistoryDate" />
+                <button type="button" class="ghost-btn ghost-btn--small" id="todoBackToToday">返回今日</button>
+              </div>
+              <div class="todo-input-row" id="todoInputRow">
                 <input type="text" id="todoInput" placeholder="添加新待办事项..." />
                 <button type="button" class="primary-btn" id="addTodoBtn">添加</button>
               </div>

@@ -469,6 +469,34 @@ p {
   opacity: 1;
 }
 
+/* 待办历史查看器 */
+.todo-history-picker {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.todo-history-picker input[type="date"] {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: #fff;
+}
+
+.todo-item.readonly {
+  opacity: 0.8;
+  cursor: default;
+}
+
+.todo-item.readonly:hover {
+  background: transparent;
+}
+
 .module-header {
   display: flex;
   align-items: center;
