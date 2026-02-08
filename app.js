@@ -1821,7 +1821,6 @@ function createFileShareModule() {
       const size = formatFileSize(file.size);
       const time = formatTime(file.uploadedAt);
       const downloadUrl = `${baseUrl}/d/${file.id}`;
-      const wgetCmd = `wget -O "${file.originalName}" "${downloadUrl}"`;
 
       card.innerHTML = `
         <span class="file-icon">${icon}</span>
@@ -1832,18 +1831,11 @@ function createFileShareModule() {
             <span>${time}</span>
             <span>下载 ${file.downloads || 0} 次</span>
           </div>
-          <div class="download-links">
-            <div class="download-link" title="点击复制浏览器下载链接" data-type="browser">${downloadUrl}</div>
-            <div class="download-link wget-link" title="点击复制 wget 命令" data-type="wget">${escapeHtml(wgetCmd)}</div>
-          </div>
         </div>
         <div class="file-actions">
-          <button type="button" class="ghost-btn ghost-btn--small copy-link-btn" data-action="copy" data-url="${downloadUrl}" data-type="browser">
-            🌐 浏览器链接
-          </button>
-          <button type="button" class="ghost-btn ghost-btn--small copy-link-btn" data-action="copy-wget" data-url="${escapeHtml(wgetCmd)}">
-            🐧 wget 命令
-          </button>
+          <a href="${downloadUrl}" class="primary-btn primary-btn--small" download="${escapeHtml(file.originalName)}">
+            📥 点击下载
+          </a>
           <button type="button" class="icon-btn" data-action="delete" aria-label="删除文件">
             <span class="icon-trash" aria-hidden="true"></span>
           </button>
@@ -1857,43 +1849,6 @@ function createFileShareModule() {
   }
 
   function handleFileListClick(event) {
-    const copyBtn = event.target.closest('[data-action="copy"]');
-    if (copyBtn) {
-      const url = copyBtn.dataset.url;
-      const isWget = copyBtn.dataset.action === 'copy-wget';
-      copyToClipboard(url).then((success) => {
-        if (success) {
-          const original = copyBtn.innerHTML;
-          copyBtn.innerHTML = '✓ 已复制';
-          setTimeout(() => {
-            copyBtn.innerHTML = original;
-          }, 1500);
-        } else {
-          // 显示链接让用户手动复制
-          prompt(isWget ? '请手动复制 wget 命令:' : '请手动复制链接:', url);
-        }
-      });
-      return;
-    }
-
-    // wget 命令复制按钮
-    const wgetBtn = event.target.closest('[data-action="copy-wget"]');
-    if (wgetBtn) {
-      const cmd = wgetBtn.dataset.url;
-      copyToClipboard(cmd).then((success) => {
-        if (success) {
-          const original = wgetBtn.innerHTML;
-          wgetBtn.innerHTML = '✓ 已复制';
-          setTimeout(() => {
-            wgetBtn.innerHTML = original;
-          }, 1500);
-        } else {
-          prompt('请手动复制 wget 命令:', cmd);
-        }
-      });
-      return;
-    }
-
     const deleteBtn = event.target.closest('[data-action="delete"]');
     if (deleteBtn) {
       const card = deleteBtn.closest('.file-card');
@@ -1902,55 +1857,6 @@ function createFileShareModule() {
         deleteFile(fileId);
       }
       return;
-    }
-
-    // 点击链接区域复制
-    const linkEl = event.target.closest('.download-link');
-    if (linkEl) {
-      const text = linkEl.textContent.trim();
-      const isWget = linkEl.dataset.type === 'wget';
-      copyToClipboard(text).then((success) => {
-        if (success) {
-          const original = linkEl.textContent;
-          linkEl.textContent = '✓ 已复制到剪贴板';
-          setTimeout(() => {
-            linkEl.textContent = original;
-          }, 1500);
-        } else {
-          prompt(isWget ? '请手动复制 wget 命令:' : '请手动复制链接:', text);
-        }
-      });
-    }
-  }
-
-  // 兼容性复制函数
-  async function copyToClipboard(text) {
-    // 尝试使用现代 Clipboard API
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch (err) {
-        console.warn('Clipboard API failed:', err);
-      }
-    }
-    
-    // 后备方案：使用 execCommand
-    try {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.left = '-9999px';
-      textarea.style.top = '-9999px';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      const success = document.execCommand('copy');
-      document.body.removeChild(textarea);
-      return success;
-    } catch (err) {
-      console.error('execCommand copy failed:', err);
-      return false;
     }
   }
 

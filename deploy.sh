@@ -19,7 +19,7 @@ NC='\033[0m' # No Color
 APP_NAME="personalhub"
 APP_DIR="/opt/personalhub"
 PORT=${PORT:-3000}
-NODE_VERSION="18"
+NODE_VERSION="24"
 DOMAIN=${DOMAIN:-"_"}  # 默认匹配所有域名
 
 # 检测操作系统

@@ -675,6 +675,16 @@ button {
   cursor: not-allowed;
 }
 
+.primary-btn--small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
 .badge {
   background: #e0ecff;
   color: #1d4ed8;
@@ -1113,46 +1123,6 @@ button {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
-}
-
-.copy-link-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.download-links {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-}
-
-.download-link {
-  display: block;
-  padding: 0.4rem 0.6rem;
-  background: #f1f5f9;
-  border-radius: 6px;
-  font-family: monospace;
-  font-size: 0.75rem;
-  color: #475569;
-  word-break: break-all;
-  user-select: all;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.download-link:hover {
-  background: #e2e8f0;
-}
-
-.download-link.wget-link {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.download-link.wget-link:hover {
-  background: #fde68a;
 }
 
 .file-actions {
