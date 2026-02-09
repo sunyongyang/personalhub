@@ -85,6 +85,9 @@ function initAppShell() {
 
   moduleRegistry.init({ moduleHost, moduleNav });
 
+  // 顶部时钟和问候语
+  initTopbar();
+
   const timeTrackerModule = createTimeTrackerModule();
   const textDraftModule = createTextDraftModule();
   const fileShareModule = createFileShareModule();
@@ -102,9 +105,37 @@ function initAppShell() {
   moduleRegistry.mount(timeTrackerModule.id);
 }
 
+function initTopbar() {
+  const clockEl = document.getElementById('topbarClock');
+  const greetingEl = document.getElementById('topbarGreeting');
+  
+  function updateClock() {
+    if (clockEl) {
+      const now = new Date();
+      clockEl.textContent = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+  }
+  
+  function updateGreeting() {
+    if (greetingEl) {
+      const hour = new Date().getHours();
+      if (hour < 6) greetingEl.textContent = '🌙 夜深了，注意休息';
+      else if (hour < 9) greetingEl.textContent = '🌅 早上好，新的一天开始了';
+      else if (hour < 12) greetingEl.textContent = '☀️ 上午好，保持专注';
+      else if (hour < 14) greetingEl.textContent = '🍽️ 中午好，记得午休';
+      else if (hour < 18) greetingEl.textContent = '🌤️ 下午好，继续加油';
+      else if (hour < 21) greetingEl.textContent = '🌆 晚上好，辛苦了';
+      else greetingEl.textContent = '🌙 夜晚了，早点休息';
+    }
+  }
+  
+  updateClock();
+  updateGreeting();
+  setInterval(updateClock, 1000);
+  setInterval(updateGreeting, 60000);
+}
+
 function createTimeTrackerModule() {
-  const STORAGE_KEY = 'ptr_entries_v1';
-  const TODO_STORAGE_KEY = 'ptr_todos_v1';
   const DEFAULT_TITLE = '未命名事项';
   const dom = {};
   const state = {
@@ -113,11 +144,14 @@ function createTimeTrackerModule() {
     selectedDate: null,
     inlineEditor: null,
     todos: [],
-    todoViewDate: null // null 表示今日，有值表示查看历史
+    allTodos: {}, // 所有日期的待办事项缓存
+    todoViewDate: null, // null 表示今日，有值表示查看历史
+    entries: [], // 时间记录缓存
+    dataLoaded: false // 数据是否已加载
   };
   let rootEl = null;
 
-  function mount(hostEl) {
+  async function mount(hostEl) {
     const template = document.getElementById('timeModuleTemplate');
     if (!template) {
       hostEl.innerHTML = '<p>无法加载时间记录模块。</p>';
@@ -132,9 +166,28 @@ function createTimeTrackerModule() {
     setupVoiceInput();
     initializeDateState();
     bindEvents();
+    // 从服务器加载数据
+    await loadDataFromServer();
     loadTodos();
     renderTodoList();
     renderDay();
+  }
+
+  async function loadDataFromServer() {
+    try {
+      // 并行加载时间记录和待办事项
+      const [entriesRes, todosRes] = await Promise.all([
+        fetch('/api/time-entries').then(r => r.json()),
+        fetch('/api/todos').then(r => r.json())
+      ]);
+      state.entries = entriesRes.entries || [];
+      state.allTodos = todosRes.todos || {};
+      state.dataLoaded = true;
+    } catch (error) {
+      console.error('Failed to load data from server:', error);
+      state.entries = [];
+      state.allTodos = {};
+    }
   }
 
   function unmount() {
@@ -786,17 +839,17 @@ function createTimeTrackerModule() {
   }
 
   function loadEntries() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (error) {
-      console.error('Failed to load entries', error);
-      return [];
-    }
+    return state.entries;
   }
 
   function saveEntries(entries) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    state.entries = entries;
+    // 异步保存到服务器
+    fetch('/api/time-entries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries })
+    }).catch(err => console.error('Failed to save entries:', err));
   }
 
   function getEntriesByDate(dateKey) {
@@ -843,15 +896,8 @@ function createTimeTrackerModule() {
 
   // ============ 待办事项功能 ============
   function loadTodos(dateKey = null) {
-    try {
-      const targetKey = dateKey || formatDateKey(new Date());
-      const raw = localStorage.getItem(TODO_STORAGE_KEY);
-      const allTodos = raw ? JSON.parse(raw) : {};
-      state.todos = allTodos[targetKey] || [];
-    } catch (error) {
-      console.error('Failed to load todos', error);
-      state.todos = [];
-    }
+    const targetKey = dateKey || formatDateKey(new Date());
+    state.todos = state.allTodos[targetKey] || [];
   }
 
   function persistTodos() {
@@ -859,15 +905,14 @@ function createTimeTrackerModule() {
     if (state.todoViewDate !== null) {
       return;
     }
-    try {
-      const todayKey = formatDateKey(new Date());
-      const raw = localStorage.getItem(TODO_STORAGE_KEY);
-      const allTodos = raw ? JSON.parse(raw) : {};
-      allTodos[todayKey] = state.todos;
-      localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(allTodos));
-    } catch (error) {
-      console.error('Failed to persist todos', error);
-    }
+    const todayKey = formatDateKey(new Date());
+    state.allTodos[todayKey] = state.todos;
+    // 异步保存到服务器
+    fetch('/api/todos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ todos: state.allTodos })
+    }).catch(err => console.error('Failed to save todos:', err));
   }
 
   function handleTodoHistoryToggle() {
@@ -1153,7 +1198,6 @@ function createTimeTrackerModule() {
 }
 
 function createTextDraftModule() {
-  const STORAGE_KEY = 'ptr_text_drafts_v1';
   const AUTOSAVE_KEY = 'ptr_text_draft_autosave_v1';
   const DEFAULT_TITLE = '未命名草稿';
   const AUTOSAVE_DELAY = 1000; // 1秒后自动保存
@@ -1163,11 +1207,12 @@ function createTextDraftModule() {
     currentDraftId: null,
     recognition: null,
     autosaveTimer: null,
-    boundBeforeUnload: null
+    boundBeforeUnload: null,
+    dataLoaded: false
   };
   let rootEl = null;
 
-  function mount(hostEl) {
+  async function mount(hostEl) {
     const template = document.getElementById('textModuleTemplate');
     if (!template) {
       hostEl.innerHTML = '<p>无法加载文本草稿模块。</p>';
@@ -1177,11 +1222,23 @@ function createTextDraftModule() {
     rootEl = hostEl.querySelector('.text-module');
     cacheDom();
     bindEvents();
-    loadDrafts();
+    await loadDraftsFromServer();
     processAutosave(); // 处理上次未保存的内容
     renderDraftList();
     updateSaveButton();
     setupAutosave();
+  }
+
+  async function loadDraftsFromServer() {
+    try {
+      const res = await fetch('/api/drafts');
+      const data = await res.json();
+      state.drafts = data.drafts || [];
+      state.dataLoaded = true;
+    } catch (error) {
+      console.error('Failed to load drafts from server:', error);
+      state.drafts = [];
+    }
   }
 
   function unmount() {
@@ -1222,18 +1279,13 @@ function createTextDraftModule() {
     setupVoiceInput();
   }
 
-  function loadDrafts() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      state.drafts = raw ? JSON.parse(raw) : [];
-    } catch (error) {
-      console.error('Failed to load drafts', error);
-      state.drafts = [];
-    }
-  }
-
   function persistDrafts() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.drafts));
+    // 异步保存到服务器
+    fetch('/api/drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drafts: state.drafts })
+    }).catch(err => console.error('Failed to save drafts:', err));
   }
 
   // ============ 自动保存功能 ============

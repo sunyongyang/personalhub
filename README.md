@@ -15,7 +15,7 @@
 ### 📝 文本草稿
 - 快速创建和保存文本草稿
 - **自动保存** - 关闭页面自动保存为历史记录
-- 本地存储，数据安全
+- **服务器存储** - 跨设备同步，数据不丢失
 - 支持语音输入
 
 ### 📤 文件快传
@@ -34,7 +34,7 @@
 - **后端**: Node.js + Express
 - **文件上传**: Multer
 - **字体**: Inter (Google Fonts)
-- **存储**: LocalStorage (前端) + 文件系统 (后端)
+- **存储**: 服务器端 JSON 文件（跨设备同步）
 - **语音识别**: Web Speech API
 
 ## 快速开始
@@ -76,6 +76,10 @@ personalhub/
 ├── server.js           # 后端服务器
 ├── package.json        # 项目配置
 ├── deploy.sh           # 部署脚本
+├── data/               # 数据存储目录
+│   ├── time_entries.json   # 时间记录
+│   ├── todos.json          # 待办事项
+│   └── drafts.json         # 文本草稿
 ├── uploads/            # 上传文件存储目录
 ├── uploads_meta.json   # 文件元数据
 └── README.md           # 项目说明
@@ -195,6 +199,30 @@ GET /d/:id
 ```
 
 直接在浏览器访问 `http://服务器地址/d/文件ID` 即可下载，无需登录。
+
+### 时间记录
+```
+GET /api/time-entries          # 获取所有记录
+POST /api/time-entries         # 保存所有记录
+POST /api/time-entries/add     # 添加单条记录
+DELETE /api/time-entries/:id   # 删除记录
+```
+
+### 待办事项
+```
+GET /api/todos                 # 获取所有待办
+POST /api/todos                # 保存所有待办
+POST /api/todos/:date          # 保存指定日期的待办
+```
+
+### 文本草稿
+```
+GET /api/drafts                # 获取所有草稿
+POST /api/drafts               # 保存所有草稿
+POST /api/drafts/add           # 添加单条草稿
+PUT /api/drafts/:id            # 更新草稿
+DELETE /api/drafts/:id         # 删除草稿
+```
 
 ## 浏览器支持
 

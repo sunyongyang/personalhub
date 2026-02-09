@@ -5,6 +5,9 @@ node_modules/
 uploads/
 uploads_meta.json
 
+# 数据存储目录
+data/
+
 # 日志
 *.log
 npm-debug.log*

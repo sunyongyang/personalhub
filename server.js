@@ -16,6 +16,17 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 // 文件元数据存储
 const META_FILE = path.join(__dirname, 'uploads_meta.json');
 
+// 数据存储文件
+const DATA_DIR = path.join(__dirname, 'data');
+const TIME_ENTRIES_FILE = path.join(DATA_DIR, 'time_entries.json');
+const TODOS_FILE = path.join(DATA_DIR, 'todos.json');
+const DRAFTS_FILE = path.join(DATA_DIR, 'drafts.json');
+
+// 确保数据目录存在
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 function loadMeta() {
   try {
     if (fs.existsSync(META_FILE)) {
@@ -29,6 +40,22 @@ function loadMeta() {
 
 function saveMeta(meta) {
   fs.writeFileSync(META_FILE, JSON.stringify(meta, null, 2));
+}
+
+// 通用数据加载/保存函数
+function loadData(filePath, defaultValue = []) {
+  try {
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    }
+  } catch (error) {
+    console.error(`Failed to load ${filePath}:`, error);
+  }
+  return defaultValue;
+}
+
+function saveData(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
 // 配置 multer 存储
@@ -158,6 +185,123 @@ app.get('/d/:id', (req, res) => {
   // 发送文件
   const fileStream = fs.createReadStream(filePath);
   fileStream.pipe(res);
+});
+
+// ============ 时间记录 API ============
+// 获取所有时间记录
+app.get('/api/time-entries', (req, res) => {
+  const entries = loadData(TIME_ENTRIES_FILE, []);
+  res.json({ entries });
+});
+
+// 保存时间记录（全量覆盖）
+app.post('/api/time-entries', (req, res) => {
+  const { entries } = req.body;
+  if (!Array.isArray(entries)) {
+    return res.status(400).json({ error: '无效的数据格式' });
+  }
+  saveData(TIME_ENTRIES_FILE, entries);
+  res.json({ success: true });
+});
+
+// 添加单条时间记录
+app.post('/api/time-entries/add', (req, res) => {
+  const entry = req.body;
+  if (!entry || !entry.id) {
+    return res.status(400).json({ error: '无效的记录' });
+  }
+  const entries = loadData(TIME_ENTRIES_FILE, []);
+  entries.unshift(entry);
+  saveData(TIME_ENTRIES_FILE, entries);
+  res.json({ success: true, entry });
+});
+
+// 删除时间记录
+app.delete('/api/time-entries/:id', (req, res) => {
+  const entries = loadData(TIME_ENTRIES_FILE, []);
+  const newEntries = entries.filter(e => e.id !== req.params.id);
+  saveData(TIME_ENTRIES_FILE, newEntries);
+  res.json({ success: true });
+});
+
+// ============ 待办事项 API ============
+// 获取所有待办事项
+app.get('/api/todos', (req, res) => {
+  const todos = loadData(TODOS_FILE, {});
+  res.json({ todos });
+});
+
+// 保存待办事项（全量覆盖）
+app.post('/api/todos', (req, res) => {
+  const { todos } = req.body;
+  if (typeof todos !== 'object') {
+    return res.status(400).json({ error: '无效的数据格式' });
+  }
+  saveData(TODOS_FILE, todos);
+  res.json({ success: true });
+});
+
+// 保存指定日期的待办事项
+app.post('/api/todos/:date', (req, res) => {
+  const { items } = req.body;
+  const dateKey = req.params.date;
+  if (!Array.isArray(items)) {
+    return res.status(400).json({ error: '无效的数据格式' });
+  }
+  const todos = loadData(TODOS_FILE, {});
+  todos[dateKey] = items;
+  saveData(TODOS_FILE, todos);
+  res.json({ success: true });
+});
+
+// ============ 文本草稿 API ============
+// 获取所有草稿
+app.get('/api/drafts', (req, res) => {
+  const drafts = loadData(DRAFTS_FILE, []);
+  res.json({ drafts });
+});
+
+// 保存草稿（全量覆盖）
+app.post('/api/drafts', (req, res) => {
+  const { drafts } = req.body;
+  if (!Array.isArray(drafts)) {
+    return res.status(400).json({ error: '无效的数据格式' });
+  }
+  saveData(DRAFTS_FILE, drafts);
+  res.json({ success: true });
+});
+
+// 添加单条草稿
+app.post('/api/drafts/add', (req, res) => {
+  const draft = req.body;
+  if (!draft || !draft.id) {
+    return res.status(400).json({ error: '无效的草稿' });
+  }
+  const drafts = loadData(DRAFTS_FILE, []);
+  drafts.unshift(draft);
+  saveData(DRAFTS_FILE, drafts);
+  res.json({ success: true, draft });
+});
+
+// 更新草稿
+app.put('/api/drafts/:id', (req, res) => {
+  const updates = req.body;
+  const drafts = loadData(DRAFTS_FILE, []);
+  const index = drafts.findIndex(d => d.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: '草稿不存在' });
+  }
+  drafts[index] = { ...drafts[index], ...updates };
+  saveData(DRAFTS_FILE, drafts);
+  res.json({ success: true, draft: drafts[index] });
+});
+
+// 删除草稿
+app.delete('/api/drafts/:id', (req, res) => {
+  const drafts = loadData(DRAFTS_FILE, []);
+  const newDrafts = drafts.filter(d => d.id !== req.params.id);
+  saveData(DRAFTS_FILE, newDrafts);
+  res.json({ success: true });
 });
 
 // 启动服务器

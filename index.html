@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>时间记录助手</title>
+    <title>PersonalHub - 个人操作台</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,10 +17,10 @@
     <div class="app-shell">
       <aside class="app-sidebar">
         <div class="sidebar-brand">
-          <div class="brand-mark">PO</div>
+          <div class="brand-mark">🚀</div>
           <div>
-            <p class="brand-title">个人操作台</p>
-            <p class="brand-subtitle">Personal Ops</p>
+            <p class="brand-title">PersonalHub</p>
+            <p class="brand-subtitle">个人效率中心</p>
           </div>
         </div>
         <nav id="moduleNav" class="module-nav"></nav>
@@ -32,13 +33,13 @@
       <div class="app-content">
         <header class="app-topbar">
           <div>
-            <p class="topbar-label">欢迎回来</p>
-            <h1>今日控制面板</h1>
+            <p class="topbar-label" id="topbarGreeting">欢迎回来</p>
+            <h1 class="topbar-title">今日控制面板</h1>
           </div>
           <div class="topbar-actions">
-            <button type="button" class="ghost-btn" disabled>新建草稿</button>
-            <button type="button" class="primary-btn" id="topbarQuickAction">
-              快速开始
+            <span class="topbar-clock" id="topbarClock"></span>
+            <button type="button" class="primary-btn pulse-btn" id="topbarQuickAction">
+              ⚡ 快速开始
             </button>
           </div>
         </header>
